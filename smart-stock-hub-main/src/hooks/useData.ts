@@ -213,3 +213,22 @@ export function useMarketplaceListings() {
     }
   });
 }
+
+export function useUpsertProfile() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (profile: { owner_name?: string; phone?: string | null; shop_name?: string; address?: string | null }) => {
+      const payload = { ...profile, user_id: user!.id };
+      const { data, error } = await supabase
+        .from("profiles")
+        .upsert(payload, { returning: "representation" })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["profile"] }),
+  });
+}

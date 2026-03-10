@@ -3,16 +3,30 @@ import { User, Phone, Mail, MapPin, Home, Settings, ShieldCheck, Bell } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useProducts, useSales } from "@/hooks/useData";
+import { useProducts, useSales, useProfile, useUpsertProfile } from "@/hooks/useData";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
 import CountUp from "react-countup";
 
 export default function Profile() {
   const { data: products = [] } = useProducts();
   const { data: sales = [] } = useSales();
+  const { data: profile, isLoading: loadingProfile } = useProfile();
+  const upsert = useUpsertProfile();
+  const { signOut } = useAuth();
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.owner_name ?? "Shopkeeper");
+      setPhone(profile.phone ?? "");
+      setShopName(profile.shop_name ?? "");
+      setCity(profile.address ?? "");
+    }
+  }, [profile]);
 
   const totalProducts = products.length;
   const totalStock = products.reduce((s, p) => s + Number(p.quantity || 0), 0);
@@ -59,7 +73,9 @@ export default function Profile() {
                   <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
                   <label className="text-xs text-muted-foreground">Email</label>
                   <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@store.com" />
-                  <Button className="w-full mt-2">Save Profile</Button>
+                  <Button className="w-full mt-2" onClick={() => upsert.mutate({ owner_name: name, phone, shop_name: shopName, address: city })}>
+                    {upsert.isLoading ? 'Saving...' : 'Save Profile'}
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -165,7 +181,9 @@ export default function Profile() {
                     <Input />
                   </div>
                   <div className="md:col-span-2">
-                    <Button>Save Shop Details</Button>
+                    <Button onClick={() => upsert.mutate({ owner_name: name, phone, shop_name: shopName, address: city })}>
+                      {upsert.isLoading ? 'Saving...' : 'Save Shop Details'}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -249,7 +267,7 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    <Button variant="destructive">Log out</Button>
+                    <Button variant="destructive" onClick={() => signOut()}>Log out</Button>
                   </div>
                 </CardContent>
               </Card>
