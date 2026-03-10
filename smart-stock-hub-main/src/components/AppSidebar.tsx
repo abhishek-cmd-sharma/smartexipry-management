@@ -49,8 +49,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-            <Package className="h-5 w-5 text-sidebar-primary-foreground" />
+          <div className="h-9 w-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0 overflow-hidden">
+            <img src="/logo.svg" alt="StockSmart" className="h-8 w-8 object-contain" />
           </div>
           {!collapsed && (
             <div>
