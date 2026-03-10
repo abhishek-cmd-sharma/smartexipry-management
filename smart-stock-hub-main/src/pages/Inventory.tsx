@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, Fragment, useRef, useEffect } from "react";
 import { 
   Plus, Pencil, Trash2, Search, Package, PackageSearch, 
   AlertCircle, ChevronDown, ChevronRight, Layers, 
@@ -345,6 +345,7 @@ export default function Inventory() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const codeReaderRef = useRef<any>(null);
 
   async function handleBarcodeLookup(code: string) {
     setForm(f => ({ ...f, barcode: code }));
@@ -387,6 +388,60 @@ export default function Inventory() {
 
   // category helper: normalized local categories
   const categoriesListNormalized = categories.map(c => c.toLowerCase());
+
+  // Start scanning automatically when dialog opens
+  useEffect(() => {
+    let active = true;
+    if (!scannerOpen) {
+      // cleanup reader if any
+      try { codeReaderRef.current?.reset(); } catch (e) {}
+      codeReaderRef.current = null;
+      setScanning(false);
+      return;
+    }
+
+    (async () => {
+      setScanError(null);
+      setScanning(true);
+      try {
+        const ZXing = await import('@zxing/browser');
+        const Reader = ZXing.BrowserMultiFormatReader;
+        const devices = await Reader.listVideoInputDevices();
+        // prefer back camera when available
+        const preferred = devices.find((d: any) => /back|rear|environment/i.test(d.label)) || devices[0];
+
+        const reader = new Reader();
+        codeReaderRef.current = reader;
+        const videoElem = document.getElementById('barcode-video') as HTMLVideoElement;
+        if (!videoElem) throw new Error('Video element not found');
+
+        reader.decodeFromVideoDevice(preferred?.deviceId, videoElem, (result: any, err: any) => {
+          if (result) {
+            const code = result.getText();
+            try { reader.reset(); } catch (e) {}
+            if (!active) return;
+            setScanning(false);
+            setScannerOpen(false);
+            handleBarcodeLookup(code);
+          }
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            // show non-trivial errors
+            // console.warn(err);
+          }
+        });
+      } catch (err: any) {
+        setScanError(err?.message || 'Failed to initialize scanner');
+        setScanning(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+      try { codeReaderRef.current?.reset(); } catch (e) {}
+      codeReaderRef.current = null;
+      setScanning(false);
+    };
+  }, [scannerOpen]);
 
   return (
     <TooltipProvider>
