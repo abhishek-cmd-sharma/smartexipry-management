@@ -46,6 +46,9 @@ interface ProductWithDiscount {
   discount_value?: number;
   discount_start_date?: string;
   discount_end_date?: string;
+  // local metadata
+  brand?: string;
+  barcode?: string;
   batch_details?: string;
 }
 
@@ -157,7 +160,7 @@ export default function Inventory() {
 
   function openAdd() {
     setEditId(null);
-    setForm({ name: "", category: "", price: "", quantity: "", expiry_date: "", batch_details: "" });
+    setForm({ name: "", category: "", price: "", quantity: "", expiry_date: "", batch_details: "", brand: "", barcode: "" });
     setDialogOpen(true);
   }
 
@@ -289,7 +292,8 @@ export default function Inventory() {
           setProductsWithDiscounts(prev => ({
             ...prev,
             [created.id]: {
-              ...prev[created.id] || {},
+              ...(created as any),
+              ...prev[created.id],
               batch_details: form.batch_details || prev[created.id]?.batch_details || "",
               brand: form.brand || prev[created.id]?.brand || "",
               barcode: form.barcode || prev[created.id]?.barcode || "",
@@ -418,15 +422,15 @@ export default function Inventory() {
         reader.decodeFromVideoDevice(preferred?.deviceId, videoElem, (result: any, err: any) => {
           if (result) {
             const code = result.getText();
-            try { reader.reset(); } catch (e) {}
+            try { (reader as any).reset(); } catch (e) {}
             if (!active) return;
             setScanning(false);
             setScannerOpen(false);
             handleBarcodeLookup(code);
           }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-            // show non-trivial errors
-            // console.warn(err);
+          if (err) {
+            // ignore not-found frames; other errors can be logged
+            // console.debug(err);
           }
         });
       } catch (err: any) {
@@ -571,22 +575,8 @@ export default function Inventory() {
                       setScanError(null);
                       setScanning(true);
                       try {
-                        const ZXing = await import('@zxing/browser');
-                        const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
-                        const videoElem = document.getElementById('barcode-video') as HTMLVideoElement;
-                        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
-                        const deviceId = devices && devices.length ? devices[0].deviceId : undefined;
-                        codeReader.decodeFromVideoDevice(deviceId, videoElem, (result, err) => {
-                          if (result) {
-                            const code = result.getText();
-                            codeReader.reset();
-                            setScanning(false);
-                            setScannerOpen(false);
-                            handleBarcodeLookup(code);
-                          }
-                        });
-                        // store instance for cleanup
-                        (window as any)._codeReader = codeReader;
+                        // scanning is auto-started when dialog opens; manual start removed
+                        setScanError('Scanner will start automatically when dialog opens.');
                       } catch (err: any) {
                         setScanning(false);
                         setScanError('Scanner initialization failed. Run `npm install @zxing/browser` and allow camera access.');
