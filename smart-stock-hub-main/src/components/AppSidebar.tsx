@@ -6,6 +6,7 @@ import {
   Store,
   ShoppingBag,
   LogOut,
+  User,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const shopkeeperItems = [
+  { title: "Profile", url: "/profile", icon: User },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Inventory", url: "/inventory", icon: Package },
   { title: "Sales Tracking", url: "/sales", icon: TrendingUp },

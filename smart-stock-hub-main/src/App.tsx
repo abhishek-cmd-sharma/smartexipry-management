@@ -14,6 +14,7 @@ import Inventory from "./pages/Inventory";
 import Sales from "./pages/Sales";
 import Analytics from "./pages/Analytics";
 import ShopNetwork from "./pages/ShopNetwork";
+import Profile from "./pages/Profile";
 import Marketplace from "./pages/Marketplace";
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +48,7 @@ function AppRoutes() {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/inventory" element={<Inventory />} />
+                    <Route path="/profile" element={<Profile />} />
                     <Route path="/sales" element={<Sales />} />
                     <Route path="/analytics" element={<Analytics />} />
                     <Route path="/network" element={<ShopNetwork />} />
