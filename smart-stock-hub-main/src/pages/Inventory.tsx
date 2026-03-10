@@ -95,7 +95,7 @@ export default function Inventory() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ 
-    name: "", category: "", price: "", quantity: "", expiry_date: "", batch_details: "" 
+    name: "", category: "", price: "", quantity: "", expiry_date: "", batch_details: "", brand: "", barcode: ""
   });
 
   // Discount Dialog
@@ -170,6 +170,7 @@ export default function Inventory() {
       quantity: "",
       expiry_date: "",
       batch_details: ""
+      , brand: "", barcode: ""
     });
     setDialogOpen(true);
   }
@@ -183,7 +184,9 @@ export default function Inventory() {
       price: String(p.price), 
       quantity: String(p.quantity), 
       expiry_date: p.expiry_date,
-      batch_details: discountData.batch_details || ""
+      batch_details: discountData.batch_details || "",
+      brand: discountData.brand || "",
+      barcode: discountData.barcode || ""
     });
     setDialogOpen(true);
   }
@@ -273,13 +276,27 @@ export default function Inventory() {
         await updateProduct.mutateAsync(updateData);
         toast.success("Product updated");
       } else {
-        await addProduct.mutateAsync({
-          name: form.name, 
+        const created = await addProduct.mutateAsync({
+          name: form.name,
           category: form.category,
-          price: Number(form.price), 
-          quantity: Number(form.quantity), 
+          price: Number(form.price),
+          quantity: Number(form.quantity),
           expiry_date: form.expiry_date,
         });
+
+        // Persist brand / barcode locally in productsWithDiscounts for display
+        if (created && created.id) {
+          setProductsWithDiscounts(prev => ({
+            ...prev,
+            [created.id]: {
+              ...prev[created.id] || {},
+              batch_details: form.batch_details || prev[created.id]?.batch_details || "",
+              brand: form.brand || prev[created.id]?.brand || "",
+              barcode: form.barcode || prev[created.id]?.barcode || "",
+            }
+          }));
+        }
+
         toast.success("Product added");
       }
       setDialogOpen(false);
@@ -324,6 +341,53 @@ export default function Inventory() {
 
   if (isLoading) return <div className="flex items-center justify-center h-64 text-muted-foreground">Loading inventory...</div>;
 
+  // Scanner state
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  async function handleBarcodeLookup(code: string) {
+    setForm(f => ({ ...f, barcode: code }));
+    // Try OpenFoodFacts lookup
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+      const json = await res.json();
+      if (json && json.status === 1 && json.product) {
+        const prod = json.product;
+        const pname = prod.product_name || prod.generic_name || '';
+        const brand = prod.brands || prod.brands_tags?.[0] || '';
+        // categories_tags often include category-like strings
+        const categories = prod.categories_tags || prod.categories || [];
+
+        // Map categories to local categories if possible
+        let mappedCategory = '';
+        for (const c of categories) {
+          for (const local of categories) { }
+        }
+
+        // Simple mapping: pick first local category that appears in categories tags (case-insensitive)
+        const tags = (categories || []).map((t: string) => t.toLowerCase());
+        let matched = categories.find((t: any) => {
+          return categoriesListNormalized.some((lc: string) => t.toLowerCase().includes(lc));
+        });
+
+        // use a helper normalized categories list from top scope
+        // Fallbacks
+        const inferredCategory = (prod.categories && prod.categories.split(',').map((s: string) => s.trim())[0]) || '';
+
+        setForm(f => ({ ...f, name: pname || f.name, brand: brand || f.brand, category: inferredCategory || f.category }));
+        toast.success('Product details auto-filled from barcode');
+      } else {
+        setScanError('No product details found for this barcode');
+      }
+    } catch (err: any) {
+      setScanError(err.message || 'Lookup failed');
+    }
+  }
+
+  // category helper: normalized local categories
+  const categoriesListNormalized = categories.map(c => c.toLowerCase());
+
   return (
     <TooltipProvider>
       <motion.div
@@ -364,6 +428,14 @@ export default function Inventory() {
                       placeholder="Enter product name"
                       className="mt-1"
                     />
+                    <div className="mt-2 flex gap-2">
+                      <Button variant="outline" size="sm" onClick={async () => setScannerOpen(true)}>Scan Barcode</Button>
+                      {form.barcode && <div className="text-xs text-muted-foreground px-2 py-1 bg-muted/40 rounded">Scanned: {form.barcode}</div>}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Brand</Label>
+                    <Input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="Brand (auto-filled from scan)" className="mt-1" />
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Category *</Label>
@@ -422,6 +494,55 @@ export default function Inventory() {
                   >
                     {editId ? "Update Product" : "Add Product"}
                   </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            {/* Barcode Scanner Dialog */}
+            <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Scan Barcode</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-2">
+                  <div className="text-sm text-muted-foreground">This uses your device camera to scan a product barcode and auto-fill product details (OpenFoodFacts lookup).</div>
+                  <div>
+                    <div id="barcode-video-container" className="w-full bg-black/10 rounded h-56 flex items-center justify-center">
+                      <video id="barcode-video" className="w-full h-full object-cover" />
+                    </div>
+                    {scanError && <div className="text-sm text-destructive mt-2">{scanError}</div>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={async () => {
+                      setScanError(null);
+                      setScanning(true);
+                      try {
+                        const ZXing = await import('@zxing/browser');
+                        const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
+                        const videoElem = document.getElementById('barcode-video') as HTMLVideoElement;
+                        const devices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+                        const deviceId = devices && devices.length ? devices[0].deviceId : undefined;
+                        codeReader.decodeFromVideoDevice(deviceId, videoElem, (result, err) => {
+                          if (result) {
+                            const code = result.getText();
+                            codeReader.reset();
+                            setScanning(false);
+                            setScannerOpen(false);
+                            handleBarcodeLookup(code);
+                          }
+                        });
+                        // store instance for cleanup
+                        (window as any)._codeReader = codeReader;
+                      } catch (err: any) {
+                        setScanning(false);
+                        setScanError('Scanner initialization failed. Run `npm install @zxing/browser` and allow camera access.');
+                      }
+                    }}>{scanning ? 'Scanning...' : 'Start Scanning'}</Button>
+                    <Button variant="outline" onClick={() => {
+                      // cleanup
+                      try { (window as any)._codeReader?.reset(); } catch (e) {}
+                      setScannerOpen(false);
+                    }}>Close</Button>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
