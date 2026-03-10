@@ -15,3 +15,31 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+// Validate publishable key at runtime and give a clear error if it's for a different project
+function tryDecodeJwtPayload(token: string) {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(atob(payload).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+// perform a lightweight check so developers see a helpful message instead of `AuthApiError: Invalid API key`
+try {
+  const projectHost = new URL(SUPABASE_URL).host; // e.g. iheuyyfxgjqywmkfrphu.supabase.co
+  const projectIdFromHost = projectHost.split('.')[0];
+  const payload = tryDecodeJwtPayload(SUPABASE_PUBLISHABLE_KEY);
+  const keyRef = payload?.re || payload?.ref || payload?.aud || payload?.sub;
+  if (keyRef && typeof keyRef === 'string' && keyRef !== projectIdFromHost) {
+    console.error(`Supabase publishable key mismatch: key belongs to '${keyRef}' but SUPABASE_URL project is '${projectIdFromHost}'. Update VITE_SUPABASE_PUBLISHABLE_KEY in your .env to the project's anon/public key.`);
+  }
+} catch (e) {
+  // ignore any issues in environments where URL or atob aren't available
+}

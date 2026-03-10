@@ -20,8 +20,15 @@ export default function Auth() {
 
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) toast.error(error.message);
-      else toast.success("Welcome back!");
+      if (error) {
+        // Provide a clearer hint when Supabase returns 401/Unauthorized
+        if ((error as any).status === 401 || /invalid api key/i.test(error.message || "")) {
+          console.error("Supabase auth 401 - check VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env", error);
+          toast.error("Authentication failed: Supabase API key may be invalid or not for this project. Check your .env settings.");
+        } else {
+          toast.error(error.message);
+        }
+      } else toast.success("Welcome back!");
     } else {
       const { error } = await supabase.auth.signUp({
         email,
